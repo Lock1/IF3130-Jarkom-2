@@ -27,7 +27,12 @@ class Client:
 
     def wait_response(self):
         # TODO : File transfer
-        print(self.conn.listen_single_datagram())
+        resp = self.conn.listen_single_datagram()
+        seg  = Segment()
+        seg.set_from_bytes(resp[0])
+        print(seg.valid_checksum())
+        print(seg)
+        print(resp)
 
 
 

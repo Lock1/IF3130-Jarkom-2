@@ -10,10 +10,10 @@ class UDP_Conn:
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
 
-    def send_bytes(self, msg : "bytes", dest : (str, int)):
+    def send_data(self, msg : "Segment", dest : (str, int)):
         # Sending bytes to destination
         # dest : (ip : str, port : int)
-        self.sock.sendto(msg, dest)
+        self.sock.sendto(msg.get_bytes(), dest)
 
 
     def listen_single_datagram(self) -> ("bytes", str):

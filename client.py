@@ -1,5 +1,6 @@
 import lib.arg, lib.conn
 import lib.config
+from lib.segment import Segment
 
 class Client:
     def __init__(self):
@@ -19,11 +20,16 @@ class Client:
 
     def get_server(self):
         # TODO : Three way handshake
-        # self.conn.send_bytes(b"hehe", (lib.config.SERVER_BIND_IP, 5005))
-        self.conn.send_bytes(b"hehe", ("", 5005))
+        data = Segment()
+        data.set_payload(b"hoho")
+        self.conn.send_data(data, (lib.config.SERVER_BIND_IP, 5005))
+        # self.conn.send_data(b"hehe", ("", 5005))
 
     def wait_response(self):
+        # TODO : File transfer
         print(self.conn.listen_single_datagram())
+
+
 
 
 

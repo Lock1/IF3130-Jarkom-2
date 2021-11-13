@@ -8,3 +8,4 @@ Referensi
 4. https://docs.python.org/3/library/socket.html
 5. https://docs.python.org/3/library/struct.html
 6. https://gist.github.com/ninedraft/7c47282f8b53ac015c1e326fffb664b5
+7. https://www.slashroot.in/how-is-tcp-and-udp-checksum-calculated

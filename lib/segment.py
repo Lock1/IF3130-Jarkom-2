@@ -36,6 +36,8 @@ class Segment:
         output += f"{'Sequence number':24} | {self.sequence}\n"
         output += f"{'Acknowledgement number':24} | {self.ack}\n"
         output += f"{'Flags':24} | [SYN {self.flag.syn}] [ACK {self.flag.ack}] [FIN {self.flag.fin}]\n"
+        output += f"{'Checksum':24} | {hex(self.checksum)}\n"
+        output += f"{'Valid checksum':24} | {self.valid_checksum()}\n"
         output += f"{'Data length':24} | {len(self.data)} bytes\n"
         return output
 
@@ -88,6 +90,9 @@ class Segment:
 
     def get_flag(self) -> SegmentFlag:
         return self.flag
+
+    def get_header(self) -> dict:
+        return {"sequence" : self.sequence, "ack" : self.ack}
 
     def valid_checksum(self) -> bool:
         return self.__calculate_checksum() == 0x0000

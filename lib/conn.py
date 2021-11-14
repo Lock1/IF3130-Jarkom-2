@@ -1,5 +1,6 @@
 import socket
 from . import config
+from .segment import Segment
 
 class UDP_Conn:
     def __init__(self, ip : str, port : int):
@@ -16,9 +17,13 @@ class UDP_Conn:
         self.sock.sendto(msg.get_bytes(), dest)
 
 
-    def listen_single_datagram(self) -> ("bytes", str):
+    def listen_single_datagram(self) -> ("Segment", str):
         # Listening single datagram
-        return self.sock.recvfrom(config.LISTEN_BUFFER_SIZE)
+        resp, addr      = self.sock.recvfrom(config.LISTEN_BUFFER_SIZE)
+        data            = Segment()
+        data.set_from_bytes(resp)
+        checksum_result = data.valid_checksum()
+        return addr, data, checksum_result
 
 
     def close_connection(self):

@@ -29,32 +29,34 @@ class Client:
         self.conn.send_data(syn_req, server_broadcast_addr)
 
         # 2. Waiting SYN + ACK from server
-        resp, server_addr = self.conn.listen_single_datagram()
-        resp_seg          = Segment()
-        resp_seg.set_from_bytes(resp)
-        if not resp_seg.valid_checksum():
+        print("[!] Waiting for response...")
+        server_addr, resp, checksum_success = self.conn.listen_single_datagram()
+        if not checksum_success:
             # TODO : Maybe add something?
             print("Failed checksum")
             exit(1)
         print(f"[S] Getting response from {server_addr[0]}:{server_addr[1]}")
-        print(resp_seg)
+        print(resp)
 
-        resp_flag = resp_seg.get_flag()
+        resp_flag = resp.get_flag()
         if resp_flag.syn and resp_flag.ack:
-            resp_head = resp_seg.get_header()
+            resp_head = resp.get_header()
             # TODO : Do something
 
             # 3. Sending ACK to server
             ack_req = Segment()
             ack_req.set_flag(False, True, False)
             self.conn.send_data(ack_req, server_addr)
+            print(f"[!] Handshake with {server_addr[0]}:{server_addr[1]} success")
         else:
-            # TODO : Do something?
-            print("Handshake failed")
+            print("[!] Invalid response : Server SYN-ACK handshake response invalid")
+            print(f"[!] Handshake with {server_addr[0]}:{server_addr[1]} failed")
+            print(f"[!] Exiting...")
             exit(1)
 
 
     def listen_file_transfer(self):
+        print("[!] Starting file transfer...")
         # TODO : Add
         pass
 
@@ -66,4 +68,4 @@ class Client:
 if __name__ == '__main__':
     main = Client()
     main.three_way_handshake()
-    print("handshake success")
+    main.listen_file_transfer()

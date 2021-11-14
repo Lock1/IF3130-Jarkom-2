@@ -8,9 +8,8 @@ class Server:
         args = {
             "port" : (int, "Server port"),
             "path" : (str, "Source path"),
-            "-m"   : (None, "Metadata"),
-            "-p"   : (None, "Parallel"),
-            "-f"   : (None, "Show full segment information")
+            "-f"   : (None, "Show segment information"),
+            "-d"   : (None, "Show full payload in hexadecimal")
         }
         parser = lib.arg.ArgParser("Server", args)
         args   = parser.get_parsed_args()
@@ -25,6 +24,8 @@ class Server:
         self.window_size           = lib.config.TCP_WINDOW_SIZE
         self.segmentcount          = math.ceil(filesize / 32768)
         self.verbose_segment_print = args.f
+        self.show_payload          = args.d
+        self.send_metadata         = lib.config.SEND_METADATA
 
     def __output_segment_info(self, addr : (str, int), data : "Segment"):
         if self.verbose_segment_print:
@@ -32,8 +33,25 @@ class Server:
             print(f"[S] [{addr_str}] Segment information :")
             print(data)
 
+        if self.show_payload:
+            print(f"[S] [{addr_str}] Payload in hexadecimal")
+            print(binascii.hexlify(data.get_payload(), " "))
+
+        if self.verbose_segment_print or self.show_payload:
+            print("")
+
     def __valid_syn_request(self, data : "Segment") -> bool:
         return data.get_flag().syn
+
+    def __send_metadata(self, client_addr : (str, int)):
+        metadata = Segment()
+        payload  = bytes(self.filename, 'ascii') + b"\x04" + bytes(self.file_ext, 'ascii')
+        metadata.set_payload(payload)
+        self.conn.send_data(metadata, client_addr)
+
+    def __get_metadata_from_file(self):
+        self.filename = self.path[self.path.rfind("/") + 1:self.path.rfind(".")]
+        self.file_ext = self.path[self.path.rfind("."):]
 
 
     def listen_for_clients(self):
@@ -71,10 +89,15 @@ class Server:
             self.client_conn_list.remove(client)
 
         print("\n[!] Commencing file transfer...")
+        if self.send_metadata:
+            self.__get_metadata_from_file()
         self.conn.set_listen_timeout(lib.config.SERVER_TRANSFER_ACK_TIMEOUT)
+
         for client_addr in self.client_conn_list:
+            if self.send_metadata:
+                self.__send_metadata(client_addr)
             self.file_transfer(client_addr)
-            # TODO : Maybe Three way handshake seq num != with data transfer
+
         self.conn.close_socket()
 
 
@@ -97,7 +120,7 @@ class Server:
                     data_segment.set_payload(src.read(32768))
                     data_segment.set_header({"sequence" : sequence_base + i, "ack" : 0})
                     self.conn.send_data(data_segment, client_addr)
-                    print(f"[!] Sending segment with sequence number {sequence_base + i}")
+                    print(f"[!] [{client_addr[0]}:{client_addr[1]}] Sending segment with sequence number {sequence_base + i}")
 
                 for _ in range(seq_window_bound - sequence_base):
                     try:
@@ -117,7 +140,7 @@ class Server:
                             print(f"[!] [{addr_str}] Source address not match, ignoring segment")
                         else:
                             print(f"[!] [{addr_str}] Unknown error")
-                            self.__output_segment_info(addr, resp)
+                        self.__output_segment_info(addr, resp)
                     except Exception:
                         print(f"[!] [{client_addr[0]}:{client_addr[1]}] ACK number {sequence_base} response time out")
                         print(f"[!] [{client_addr[0]}:{client_addr[1]}] Retrying transfer from {sequence_base} to {seq_window_bound - 1}...")
@@ -129,10 +152,6 @@ class Server:
             data_segment = Segment()
             data_segment.set_flag(False, False, True)
             self.conn.send_data(data_segment, client_addr)
-
-
-
-
 
 
     def three_way_handshake(self, client_addr : (str, int)) -> bool:

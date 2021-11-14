@@ -1,5 +1,13 @@
 # Tugas Besar 2 - IF3130 - Jaringan Komputer
-**TBA** \
+**TBA**
+
+| Library  |
+| -------  |
+| struct   |
+| socket   |
+| math     |
+| argparse |
+| binascii |
 
 Referensi
 1. https://en.wikipedia.org/wiki/Transmission_Control_Protocol

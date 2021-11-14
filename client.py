@@ -1,15 +1,15 @@
 import lib.arg, lib.conn
 import lib.config
 from lib.segment import Segment
+import binascii
 
 class Client:
     def __init__(self):
         args = {
             "port" : (int, "Client port"),
             "path" : (str, "Destination path"),
-            "-m"   : (None, "Metadata"),
-            "-p"   : (None, "Parallel"),
-            "-f"   : (None, "Show full segment information")
+            "-f"   : (None, "Show segment information"),
+            "-d"   : (None, "Show full payload in hexadecimal")
         }
         parser = lib.arg.ArgParser("Client", args)
         args   = parser.get_parsed_args()
@@ -19,12 +19,49 @@ class Client:
         self.conn                  = lib.conn.UDP_Conn(self.ip, self.port)
         self.path                  = args.path
         self.verbose_segment_print = args.f
+        self.show_payload          = args.d
+        self.get_metadata          = lib.config.SEND_METADATA
 
     def __output_segment_info(self, addr : (str, int), data : "Segment"):
         if self.verbose_segment_print:
             addr_str = f"{addr[0]}:{addr[1]}"
             print(f"[S] [{addr_str}] Segment information :")
             print(data)
+
+        if self.show_payload:
+            print(f"[S] [{addr_str}] Payload in hexadecimal")
+            print(binascii.hexlify(data.get_payload(), " "))
+
+        if self.verbose_segment_print or self.show_payload:
+            print("")
+
+
+    def __get_metadata(self):
+        addr_str = f"{self.server_addr[0]}:{self.server_addr[1]}"
+        print(f"[Bonus] [{addr_str}] Fetching metadata...")
+        addr, resp, checksum_success = self.conn.listen_single_datagram()
+        if checksum_success:
+            payload = resp.get_payload()
+            # Payload parsing
+            parsing_filename = True
+            filename         = ""
+            file_ext         = ""
+            for byte in payload:
+                if byte == 0x4:
+                    parsing_filename = False
+                elif parsing_filename:
+                    filename += chr(byte)
+                else:
+                    file_ext += chr(byte)
+
+            print(f"\n[Bonus] [{addr_str}] Metadata information :")
+            print(f"[Bonus] [{addr_str}] Source filename : {filename}")
+            print(f"[Bonus] [{addr_str}] File extension  : {file_ext}\n")
+        else:
+            print(f"[Bonus] [{addr_str}] Checksum failed, metadata packet is corrupted")
+        self.__output_segment_info(addr, resp)
+
+
 
     def three_way_handshake(self):
         # 1. SYN to server
@@ -48,9 +85,6 @@ class Client:
 
         resp_flag = resp.get_flag()
         if resp_flag.syn and resp_flag.ack:
-            resp_head = resp.get_header()
-            # TODO : Do something
-
             # 3. Sending ACK to server
             ack_req = Segment()
             ack_req.set_flag(False, True, False)
@@ -66,6 +100,9 @@ class Client:
 
     def listen_file_transfer(self):
         print("[!] Starting file transfer...")
+        if self.get_metadata:
+            self.__get_metadata()
+
         with open(self.path, "wb") as dst:
             request_number = 0
             end_of_file    = False
@@ -94,8 +131,8 @@ class Client:
 
                 self.__output_segment_info(addr, resp)
         self.conn.close_socket()
-    # def get_metadata
-    # TODO : Extra, bonus metadata request
+
+
 
 
 

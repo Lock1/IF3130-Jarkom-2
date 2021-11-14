@@ -17,6 +17,10 @@ class UDP_Conn:
         self.sock.sendto(msg.get_bytes(), dest)
 
 
+    def set_listen_timeout(self, timeout : float):
+        self.sock.settimeout(timeout)
+
+
     def listen_single_datagram(self) -> ("Segment", str):
         # Listening single datagram
         resp, addr      = self.sock.recvfrom(config.LISTEN_BUFFER_SIZE)
@@ -26,5 +30,5 @@ class UDP_Conn:
         return addr, data, checksum_result
 
 
-    def close_connection(self):
+    def close_socket(self):
         self.sock.close()

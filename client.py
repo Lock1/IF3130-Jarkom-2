@@ -8,16 +8,23 @@ class Client:
             "port" : (int, "Client port"),
             "path" : (str, "Destination path"),
             "-m"   : (None, "Metadata"),
-            "-p"   : (None, "Parallel")
+            "-p"   : (None, "Parallel"),
+            "-f"   : (None, "Show full segment information")
         }
         parser = lib.arg.ArgParser("Client", args)
         args   = parser.get_parsed_args()
 
-        self.ip   = lib.config.CLIENT_BIND_IP
-        self.port = args.port
-        self.conn = lib.conn.UDP_Conn(self.ip, self.port)
-        self.path = args.path
+        self.ip                    = lib.config.CLIENT_BIND_IP
+        self.port                  = args.port
+        self.conn                  = lib.conn.UDP_Conn(self.ip, self.port)
+        self.path                  = args.path
+        self.verbose_segment_print = args.f
 
+    def __output_segment_info(self, addr : (str, int), data : "Segment"):
+        if self.verbose_segment_print:
+            addr_str = f"{addr[0]}:{addr[1]}"
+            print(f"[S] [{addr_str}] Segment information :")
+            print(data)
 
     def three_way_handshake(self):
         # 1. SYN to server
@@ -34,10 +41,10 @@ class Client:
         server_addr, resp, checksum_success = self.conn.listen_single_datagram()
         if not checksum_success:
             # TODO : Maybe add something?
-            print("Failed checksum")
+            print("[!] Checksum failed")
             exit(1)
         print(f"[S] Getting response from {server_addr[0]}:{server_addr[1]}")
-        print(resp)
+        self.__output_segment_info(server_addr, resp)
 
         resp_flag = resp.get_flag()
         if resp_flag.syn and resp_flag.ack:
@@ -49,9 +56,9 @@ class Client:
             ack_req.set_flag(False, True, False)
             self.conn.send_data(ack_req, server_addr)
             self.server_addr = server_addr
-            print(f"[!] Handshake with {server_addr[0]}:{server_addr[1]} success")
+            print(f"\n[!] Handshake with {server_addr[0]}:{server_addr[1]} success")
         else:
-            print("[!] Invalid response : Server SYN-ACK handshake response invalid")
+            print("\n[!] Invalid response : Server SYN-ACK handshake response invalid")
             print(f"[!] Handshake with {server_addr[0]}:{server_addr[1]} failed")
             print(f"[!] Exiting...")
             exit(1)
@@ -85,8 +92,8 @@ class Client:
                 elif not checksum_success:
                     print(f"[!] [{addr_str}] Checksum failed, ignoring segment")
 
-                print(f"[S] [{addr_str}] Segment information")
-                print(resp)
+                self.__output_segment_info(addr, resp)
+        self.conn.close_socket()
     # def get_metadata
     # TODO : Extra, bonus metadata request
 

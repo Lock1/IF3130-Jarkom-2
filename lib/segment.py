@@ -38,7 +38,7 @@ class Segment:
         output += f"{'Flags':24} | [SYN {self.flag.syn}] [ACK {self.flag.ack}] [FIN {self.flag.fin}]\n"
         output += f"{'Checksum':24} | {hex(self.checksum)}\n"
         output += f"{'Valid checksum':24} | {self.valid_checksum()}\n"
-        output += f"{'Data length':24} | {len(self.data)} bytes\n"
+        output += f"{'Data length':24} | {len(self.data)} bytes"
         return output
 
     def __calculate_checksum(self) -> int:

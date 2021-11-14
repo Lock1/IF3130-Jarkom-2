@@ -9,7 +9,8 @@ class Server:
             "port" : (int, "Server port"),
             "path" : (str, "Source path"),
             "-m"   : (None, "Metadata"),
-            "-p"   : (None, "Parallel")
+            "-p"   : (None, "Parallel"),
+            "-f"   : (None, "Show full segment information")
         }
         parser = lib.arg.ArgParser("Server", args)
         args   = parser.get_parsed_args()
@@ -20,10 +21,16 @@ class Server:
         with open(self.path, "rb") as src:
             src.seek(0, 2)         # Seek to end of file
             filesize = src.tell()  # Get file size
-        self.filesize      = filesize
-        self.sizeperwindow = lib.config.TCP_WINDOW_SIZE * 32768
-        self.segmentcount  = math.ceil(filesize / 32768)
+        self.filesize              = filesize
+        self.window_size           = lib.config.TCP_WINDOW_SIZE
+        self.segmentcount          = math.ceil(filesize / 32768)
+        self.verbose_segment_print = args.f
 
+    def __output_segment_info(self, addr : (str, int), data : "Segment"):
+        if self.verbose_segment_print:
+            addr_str = f"{addr[0]}:{addr[1]}"
+            print(f"[S] [{addr_str}] Segment information :")
+            print(data)
 
     def __valid_syn_request(self, data : "Segment") -> bool:
         return data.get_flag().syn
@@ -47,7 +54,7 @@ class Server:
                 else:
                     waiting_client = False
 
-        broadconn.close_connection()
+        broadconn.close_socket()
 
 
     def start_file_transfer(self):
@@ -64,49 +71,59 @@ class Server:
             self.client_conn_list.remove(client)
 
         print("\n[!] Commencing file transfer...")
+        self.conn.set_listen_timeout(lib.config.SERVER_TRANSFER_ACK_TIMEOUT)
         for client_addr in self.client_conn_list:
             self.file_transfer(client_addr)
             # TODO : Maybe Three way handshake seq num != with data transfer
+        self.conn.close_socket()
 
 
     def file_transfer(self, client_addr : tuple):
         sequence_base     = 0
-        window_size       = lib.config.TCP_WINDOW_SIZE
+        window_size       = self.window_size
         seq_window_bound  = min(sequence_base + window_size, self.segmentcount)
 
+        # 32768 bytes max per segment
         with open(self.path, "rb") as src:
-            # 32768 bytes max per segment
 
             # File transfer
+            iter_count = 1
             while sequence_base < self.segmentcount:
                 # Sending segments within window
+                print(f"\n[!] Transfer iteration = {iter_count}")
                 for i in range(seq_window_bound - sequence_base):
                     data_segment = Segment()
                     src.seek(32768 * (sequence_base + i))
                     data_segment.set_payload(src.read(32768))
                     data_segment.set_header({"sequence" : sequence_base + i, "ack" : 0})
                     self.conn.send_data(data_segment, client_addr)
-                    print(f"[!] Sending segment with sequence number {sequence_base}")
+                    print(f"[!] Sending segment with sequence number {sequence_base + i}")
 
                 for _ in range(seq_window_bound - sequence_base):
-                    addr, resp, checksum_success = self.conn.listen_single_datagram()
-                    # TODO : Add timeout
-                    addr_str = f"{addr[0]}:{addr[1]}"
-                    if checksum_success and addr == client_addr:
-                        if resp.get_header()["ack"] == sequence_base:
-                            sequence_base    += 1
-                            seq_window_bound = min(sequence_base + window_size, self.segmentcount)
-                            print(f"[!] [{addr_str}] ACK number {resp.get_header()['ack']}, new sequence base = {sequence_base}")
+                    try:
+                        addr, resp, checksum_success = self.conn.listen_single_datagram()
+
+                        addr_str = f"{addr[0]}:{addr[1]}"
+                        if checksum_success and addr == client_addr:
+                            if resp.get_header()["ack"] == sequence_base:
+                                sequence_base    += 1
+                                seq_window_bound = min(sequence_base + window_size, self.segmentcount)
+                                print(f"[!] [{addr_str}] ACK number {resp.get_header()['ack']}, new sequence base = {sequence_base}")
+                            else:
+                                print(f"[!] [{addr_str}] ACK number not match, ignoring segment")
+                        elif not checksum_success:
+                            print(f"[!] [{addr_str}] Checksum failed {addr[0]}:{addr[1]}")
+                        elif addr != client_addr:
+                            print(f"[!] [{addr_str}] Source address not match, ignoring segment")
                         else:
-                            print(f"[!] [{addr_str}] ACK number not match, ignoring segment")
-                    elif not checksum_success:
-                        print(f"[!] [{addr_str}] Checksum failed {addr[0]}:{addr[1]}")
-                    elif addr != client_addr:
-                        print(f"[!] [{addr_str}] Source address not match, ignoring segment")
-                    else:
-                        print(f"[!] [{addr_str}] Unknown error")
-                    print(f"[S] [{addr_str}] Segment information :")
-                    print(resp)
+                            print(f"[!] [{addr_str}] Unknown error")
+                            self.__output_segment_info(addr, resp)
+                    except Exception:
+                        print(f"[!] [{client_addr[0]}:{client_addr[1]}] ACK number {sequence_base} response time out")
+                        print(f"[!] [{client_addr[0]}:{client_addr[1]}] Retrying transfer from {sequence_base} to {seq_window_bound - 1}...")
+                        break
+
+                iter_count += 1
 
             print(f"\n[!] [{client_addr[0]}:{client_addr[1]}] File transfer completed, sending FIN to client...")
             data_segment = Segment()

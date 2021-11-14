@@ -16,6 +16,7 @@ class Client:
         self.ip   = lib.config.CLIENT_BIND_IP
         self.port = args.port
         self.conn = lib.conn.UDP_Conn(self.ip, self.port)
+        self.path = args.path
 
 
     def three_way_handshake(self):
@@ -47,6 +48,7 @@ class Client:
             ack_req = Segment()
             ack_req.set_flag(False, True, False)
             self.conn.send_data(ack_req, server_addr)
+            self.server_addr = server_addr
             print(f"[!] Handshake with {server_addr[0]}:{server_addr[1]} success")
         else:
             print("[!] Invalid response : Server SYN-ACK handshake response invalid")
@@ -57,9 +59,34 @@ class Client:
 
     def listen_file_transfer(self):
         print("[!] Starting file transfer...")
-        # TODO : Add
-        pass
+        with open(self.path, "wb") as dst:
+            request_number = 0
+            end_of_file    = False
+            while not end_of_file:
+                addr, resp, checksum_success = self.conn.listen_single_datagram()
+                addr_str = f"{addr[0]}:{addr[1]}"
+                if addr == self.server_addr and checksum_success:
+                    segment_seq_number = resp.get_header()["sequence"]
+                    if segment_seq_number == request_number:
+                        print(f"[!] [{addr_str}] Sequence number match with Rn, sending Ack number {request_number}...")
+                        dst.write(resp.get_payload())
+                        ack_resp = Segment()
+                        ack_resp.set_header({"sequence" : 0, "ack" : request_number})
+                        self.conn.send_data(ack_resp, self.server_addr)
+                        request_number += 1
 
+                    elif resp.get_flag().fin:
+                        end_of_file = True
+                        print(f"[!] [{addr_str}] FIN flag, stopping transfer...")
+
+                    else:
+                        print(f"[!] [{addr_str}] Sequence number not equal with Rn ({segment_seq_number} =/= {request_number}), ignoring...")
+
+                elif not checksum_success:
+                    print(f"[!] [{addr_str}] Checksum failed, ignoring segment")
+
+                print(f"[S] [{addr_str}] Segment information")
+                print(resp)
     # def get_metadata
     # TODO : Extra, bonus metadata request
 

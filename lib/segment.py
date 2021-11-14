@@ -94,5 +94,8 @@ class Segment:
     def get_header(self) -> dict:
         return {"sequence" : self.sequence, "ack" : self.ack}
 
+    def get_payload(self) -> "bytes":
+        return self.data
+
     def valid_checksum(self) -> bool:
         return self.__calculate_checksum() == 0x0000

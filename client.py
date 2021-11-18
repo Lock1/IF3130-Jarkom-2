@@ -38,7 +38,7 @@ class Client:
 
     def __get_metadata(self):
         addr_str = f"{self.server_addr[0]}:{self.server_addr[1]}"
-        print(f"[Bonus] [{addr_str}] Fetching metadata...")
+        print(f"\n[Bonus] [{addr_str}] Fetching metadata...")
         addr, resp, checksum_success = self.conn.listen_single_datagram()
         if checksum_success:
             payload = resp.get_payload()
@@ -54,7 +54,7 @@ class Client:
                 else:
                     file_ext += chr(byte)
 
-            print(f"\n[Bonus] [{addr_str}] Metadata information :")
+            print(f"[Bonus] [{addr_str}] Metadata information :")
             print(f"[Bonus] [{addr_str}] Source filename : {filename}")
             print(f"[Bonus] [{addr_str}] File extension  : {file_ext}\n")
         else:
@@ -131,7 +131,6 @@ class Client:
 
                 self.__output_segment_info(addr, resp)
         self.conn.close_socket()
-
 
 
 

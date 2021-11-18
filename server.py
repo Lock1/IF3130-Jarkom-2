@@ -2,6 +2,11 @@ import lib.arg, lib.conn
 import lib.config
 from lib.segment import Segment
 import math
+import time
+import socket
+import threading
+
+
 
 class Server:
     def __init__(self):
@@ -26,6 +31,10 @@ class Server:
         self.verbose_segment_print = args.f
         self.show_payload          = args.d
         self.send_metadata         = lib.config.SEND_METADATA
+        self.parallel_mode         = lib.config.USE_PARALLEL
+        self.ack_timeout           = lib.config.SERVER_TRANSFER_ACK_TIMEOUT
+        if self.send_metadata:
+            self.__get_metadata_from_file()
 
     def __output_segment_info(self, addr : (str, int), data : "Segment"):
         if self.verbose_segment_print:
@@ -53,26 +62,81 @@ class Server:
         self.filename = self.path[self.path.rfind("/") + 1:self.path.rfind(".")]
         self.file_ext = self.path[self.path.rfind("."):]
 
+    def __parallel_packet_queue_listener(self):
+        while True:
+            addr, data, checksum_success = self.conn.listen_single_datagram()
+            if checksum_success:
+                if self.__valid_syn_request(data):
+                    self.syn_request_queue.append((addr, data, checksum_success))
+                elif addr in self.packet_queue:
+                    self.packet_queue[addr].append((addr, data, checksum_success))
+                else:
+                    self.packet_queue[addr] = [(addr, data, checksum_success)]
+            else:
+                print(f"[!] [Listener] [{addr[0]}:{addr[1]}] Checksum error")
+
+    def __parallel_listen_syn_request(self):
+        if self.syn_request_queue:   # If queue is not empty
+            return self.syn_request_queue.pop(0)
+        else:
+            return None, None, False
+
+    def __parallel_client_listener(self):
+        self.client_conn_list = []
+        while True:
+            addr, data, checksum_success = self.__parallel_listen_syn_request()
+
+            if checksum_success and addr not in self.client_conn_list and self.__valid_syn_request(data):
+                print("\n[!] Initiating three way handshake with clients...")
+                try:
+                    handshake_success = self.three_way_handshake(addr)
+                    if handshake_success:
+                        self.client_conn_list.append(addr)
+                        thread = threading.Thread(target=self.file_transfer, args=(addr,))
+                        thread.start()
+                except socket.timeout:
+                    print(f"[!] [{addr[0]}:{addr[1]}] Handshake failed, connection timeout")
+
+    def __fetch_data_from_addr(self, addr : (str, int)) -> ("Tuple addr", "Segment", "Checksum_result"):
+        if self.parallel_mode:
+            timeout = time.time() + self.ack_timeout
+            # Blocking loop
+            while addr not in self.packet_queue or not self.packet_queue[addr]:
+                if time.time() >= timeout:
+                    raise socket.timeout()
+
+
+            return self.packet_queue[addr].pop(0)
+        else:
+            return self.conn.listen_single_datagram()
+
+
 
     def listen_for_clients(self):
-        self.client_conn_list = []
-        broadconn             = lib.conn.UDP_Conn("", self.port)
-        waiting_client        = True
+        self.conn = lib.conn.UDP_Conn(self.ip, self.port)
+        if self.parallel_mode:
+            self.packet_queue      = {}          # Dictionary with client address as key and queue as value
+            self.syn_request_queue = []
+            packet_listener_thread = threading.Thread(target=self.__parallel_packet_queue_listener, args=())
+            packet_listener_thread.start()
+            self.__parallel_client_listener()
+        else:
+            self.client_conn_list = []
+            waiting_client        = True
 
-        while waiting_client:
-            addr, data, checksum_success = broadconn.listen_single_datagram()
-            is_valid_syn_req             = self.__valid_syn_request(data)
-            if is_valid_syn_req and addr not in self.client_conn_list and checksum_success:
-                self.client_conn_list.append(addr)
+            while waiting_client:
+                addr, data, checksum_success = self.conn.listen_single_datagram()
+                if self.__valid_syn_request(data) and addr not in self.client_conn_list and checksum_success:
+                    self.client_conn_list.append(addr)
 
-                print(f"[!] Client ({addr[0]}:{addr[1]}) found")
-                prompt = input("[?] Listen more? (y/n) ")
-                if prompt == "y":
-                    waiting_client = True
-                else:
-                    waiting_client = False
+                    print(f"[!] Client ({addr[0]}:{addr[1]}) found")
+                    prompt = input("[?] Listen more? (y/n) ")
+                    if prompt == "y":
+                        waiting_client = True
+                    else:
+                        waiting_client = False
 
-        broadconn.close_socket()
+
 
 
     def start_file_transfer(self):
@@ -89,19 +153,15 @@ class Server:
             self.client_conn_list.remove(client)
 
         print("\n[!] Commencing file transfer...")
-        if self.send_metadata:
-            self.__get_metadata_from_file()
-        self.conn.set_listen_timeout(lib.config.SERVER_TRANSFER_ACK_TIMEOUT)
 
         for client_addr in self.client_conn_list:
-            if self.send_metadata:
-                self.__send_metadata(client_addr)
             self.file_transfer(client_addr)
 
-        self.conn.close_socket()
 
 
     def file_transfer(self, client_addr : tuple):
+        if self.send_metadata:
+            self.__send_metadata(client_addr)
         sequence_base     = 0
         window_size       = self.window_size
         seq_window_bound  = min(sequence_base + window_size, self.segmentcount)
@@ -113,7 +173,8 @@ class Server:
             iter_count = 1
             while sequence_base < self.segmentcount:
                 # Sending segments within window
-                print(f"\n[!] Transfer iteration = {iter_count}")
+                if not self.parallel_mode:
+                    print(f"\n[!] [{client_addr[0]}:{client_addr[1]}] Transfer iteration = {iter_count}")
                 for i in range(seq_window_bound - sequence_base):
                     data_segment = Segment()
                     src.seek(32768 * (sequence_base + i))
@@ -124,7 +185,7 @@ class Server:
 
                 for _ in range(seq_window_bound - sequence_base):
                     try:
-                        addr, resp, checksum_success = self.conn.listen_single_datagram()
+                        addr, resp, checksum_success = self.__fetch_data_from_addr(client_addr)
 
                         addr_str = f"{addr[0]}:{addr[1]}"
                         if checksum_success and addr == client_addr:
@@ -140,18 +201,20 @@ class Server:
                             print(f"[!] [{addr_str}] Source address not match, ignoring segment")
                         else:
                             print(f"[!] [{addr_str}] Unknown error")
-                        self.__output_segment_info(addr, resp)
-                    except Exception:
+                            self.__output_segment_info(addr, resp)
+                    except socket.timeout:
                         print(f"[!] [{client_addr[0]}:{client_addr[1]}] ACK number {sequence_base} response time out")
                         print(f"[!] [{client_addr[0]}:{client_addr[1]}] Retrying transfer from {sequence_base} to {seq_window_bound - 1}...")
                         break
 
                 iter_count += 1
 
-            print(f"\n[!] [{client_addr[0]}:{client_addr[1]}] File transfer completed, sending FIN to client...")
+            print(f"\n[!] [{client_addr[0]}:{client_addr[1]}] File transfer completed, sending FIN to client...\n")
             data_segment = Segment()
             data_segment.set_flag(False, False, True)
             self.conn.send_data(data_segment, client_addr)
+
+
 
 
     def three_way_handshake(self, client_addr : (str, int)) -> bool:
@@ -164,7 +227,7 @@ class Server:
         self.conn.send_data(synack_resp, client_addr)
 
         # 3. Wait ACK response
-        addr, resp, checksum_success = self.conn.listen_single_datagram()
+        addr, resp, checksum_success = self.__fetch_data_from_addr(client_addr)
         ack_flag = resp.get_flag()
         if addr == client_addr and ack_flag.ack and checksum_success:
             print(f"[!] Handshake success with {client_addr[0]}:{client_addr[1]}")
@@ -177,7 +240,6 @@ class Server:
 
 
 
-
 if __name__ == '__main__':
     main = Server()
     print(f"[!] Server started at {main.ip}:{main.port}...")
@@ -185,8 +247,9 @@ if __name__ == '__main__':
     print("[!] Listening to broadcast address for clients.")
     main.listen_for_clients()
 
-    print(f"\n{len(main.client_conn_list)} clients found:")
-    for i, (ip, port) in enumerate(main.client_conn_list, start=1):
-        print(f"{i}. {ip}:{port}")
+    if not main.parallel_mode:
+        print(f"\n{len(main.client_conn_list)} clients found:")
+        for i, (ip, port) in enumerate(main.client_conn_list, start=1):
+            print(f"{i}. {ip}:{port}")
 
-    main.start_file_transfer()
+        main.start_file_transfer()

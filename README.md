@@ -11,6 +11,8 @@
 | threading |
 | time      |
 | fcntl     |
+| ipaddress |
+
 
 Referensi
 1. https://en.wikipedia.org/wiki/Transmission_Control_Protocol
@@ -23,3 +25,5 @@ Referensi
 8. https://www.javatpoint.com/go-back-n-arq
 9. https://stackoverflow.com/questions/24196932/how-can-i-get-the-ip-address-from-nic-in-python
 10. https://man7.org/linux/man-pages/man2/ioctl.2.html
+11. https://stackoverflow.com/questions/47316777/calculate-broadcast-by-ip-and-mask
+12. https://stackoverflow.com/questions/936444/retrieving-network-mask-in-python

@@ -35,7 +35,12 @@ class Server:
         self.ack_timeout           = lib.config.SERVER_TRANSFER_ACK_TIMEOUT
         if self.send_metadata:
             self.__get_metadata_from_file()
-        self.conn                  = lib.conn.UDP_Conn(self.ip, self.port, auto_ifname=lib.config.SERVER_INTERFACE_NAME)
+        self.conn                  = lib.conn.UDP_Conn(
+            self.ip,
+            self.port,
+            auto_ifname=lib.config.SERVER_INTERFACE_NAME,
+            listen_broadcast=True
+            )
         self.ip                    = self.conn.get_ipv4()
 
     def __output_segment_info(self, addr : (str, int), data : "Segment"):
@@ -98,6 +103,8 @@ class Server:
                         thread.start()
                 except socket.timeout:
                     print(f"[!] [{addr[0]}:{addr[1]}] Handshake failed, connection timeout")
+            elif addr in self.client_conn_list:
+                print(f"[!] Client ({addr[0]}:{addr[1]}) already in list")
 
     def __fetch_data_from_addr(self, addr : (str, int)) -> ("Tuple addr", "Segment", "Checksum_result"):
         if self.parallel_mode:
@@ -136,8 +143,8 @@ class Server:
                         waiting_client = True
                     else:
                         waiting_client = False
-
-
+                elif addr in self.client_conn_list:
+                    print(f"[!] Client ({addr[0]}:{addr[1]}) already in list")
 
 
     def start_file_transfer(self):

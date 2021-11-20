@@ -1,12 +1,13 @@
 # Config file
-AUTO_CONFIG_IP        = True         # Will override BIND_IP configuration
-CLIENT_INTERFACE_NAME = b"eth0"
+# Tested on WSL2 with Ubuntu 20.04 and Virtualbox Ubuntu 20.04
+AUTO_CONFIG_IP        = True       # Will override BIND_IP and BROADCAST_IP configuration
+CLIENT_INTERFACE_NAME = b"eth0"    # WSL often use "eth0", Virtualbox bridged "enp0s3"
 SERVER_INTERFACE_NAME = b"eth0"
 
-CLIENT_BIND_IP        = "127.0.0.1"
-SERVER_BIND_IP        = "127.0.0.1"
+CLIENT_BIND_IP        = "localhost"
+SERVER_BIND_IP        = "localhost"
 CLIENT_SEND_PORT      = 5005         # Target port for sending segment
-SERVER_BROADCAST_IP   = ""
+SERVER_BROADCAST_IP   = ""           # Target IP for client broadcast
 
 LISTEN_BUFFER_SIZE    = 2**16
 TCP_WINDOW_SIZE       = 5

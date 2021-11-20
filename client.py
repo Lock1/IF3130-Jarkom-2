@@ -2,6 +2,7 @@ import lib.arg, lib.conn
 import lib.config
 from lib.segment import Segment
 import binascii
+import fcntl
 
 class Client:
     def __init__(self):
@@ -16,11 +17,13 @@ class Client:
 
         self.ip                    = lib.config.CLIENT_BIND_IP
         self.port                  = args.port
-        self.conn                  = lib.conn.UDP_Conn(self.ip, self.port)
         self.path                  = args.path
         self.verbose_segment_print = args.f
         self.show_payload          = args.d
         self.get_metadata          = lib.config.SEND_METADATA
+        self.conn                  = lib.conn.UDP_Conn(self.ip, self.port, auto_ifname=lib.config.CLIENT_INTERFACE_NAME)
+        self.ip                    = self.conn.get_ipv4()
+
 
     def __output_segment_info(self, addr : (str, int), data : "Segment"):
         if self.verbose_segment_print:
@@ -65,7 +68,7 @@ class Client:
 
     def three_way_handshake(self):
         # 1. SYN to server
-        server_broadcast_addr = (lib.config.SERVER_BROADCAST_IP, lib.config.SERVER_LISTEN_PORT)
+        server_broadcast_addr = (lib.config.SERVER_BROADCAST_IP, lib.config.CLIENT_SEND_PORT)
         print(f"Client started at {self.ip}:{self.port}")
         print("[!] Initiating three way handshake...")
         print(f"[!] Sending broadcast SYN request to port {server_broadcast_addr[1]}")

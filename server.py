@@ -35,6 +35,8 @@ class Server:
         self.ack_timeout           = lib.config.SERVER_TRANSFER_ACK_TIMEOUT
         if self.send_metadata:
             self.__get_metadata_from_file()
+        self.conn                  = lib.conn.UDP_Conn(self.ip, self.port, auto_ifname=lib.config.SERVER_INTERFACE_NAME)
+        self.ip                    = self.conn.get_ipv4()
 
     def __output_segment_info(self, addr : (str, int), data : "Segment"):
         if self.verbose_segment_print:
@@ -113,7 +115,6 @@ class Server:
 
 
     def listen_for_clients(self):
-        self.conn = lib.conn.UDP_Conn(self.ip, self.port)
         if self.parallel_mode:
             self.packet_queue      = {}          # Dictionary with client address as key and queue as value
             self.syn_request_queue = []
@@ -141,7 +142,6 @@ class Server:
 
     def start_file_transfer(self):
         print("\n[!] Initiating three way handshake with clients...")
-        self.conn = lib.conn.UDP_Conn(self.ip, self.port)
         failed_handshake_addr = []
         for client_addr in self.client_conn_list:
             print(f"[!] Sending SYN-ACK to {client_addr[0]}:{client_addr[1]}")

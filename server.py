@@ -216,12 +216,19 @@ class Server:
 
                 iter_count += 1
 
+            # Tearing down connection
             print(f"\n[!] [{client_addr[0]}:{client_addr[1]}] File transfer completed, sending FIN to client...\n")
             data_segment = Segment()
             data_segment.set_flag(False, False, True)
             self.conn.send_data(data_segment, client_addr)
 
-
+            # Waiting ACK response
+            addr, resp, checksum_success = self.__fetch_data_from_addr(client_addr)
+            if resp.get_flag().ack:
+                print(f"\n[!] [{client_addr[0]}:{client_addr[1]}] Connection closed\n")
+            else:
+                print(f"\n[!] [{client_addr[0]}:{client_addr[1]}] Invalid ACK segment\n")
+                self.__output_segment_info(resp)
 
 
     def three_way_handshake(self, client_addr : (str, int)) -> bool:

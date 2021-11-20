@@ -132,6 +132,11 @@ class Client:
                     elif resp.get_flag().fin:
                         end_of_file = True
                         print(f"[!] [{addr_str}] FIN flag, stopping transfer...")
+                        print(f"[!] [{addr_str}] Sending ACK tearing down connection...")
+                        ack_resp = Segment()
+                        ack_resp.set_flag(False, True, False)
+                        self.conn.send_data(ack_resp, self.server_addr)
+
 
                     else:
                         print(f"[!] [{addr_str}] Sequence number not equal with Rn ({segment_seq_number} =/= {request_number}), ignoring...")

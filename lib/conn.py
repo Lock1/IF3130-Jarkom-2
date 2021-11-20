@@ -7,8 +7,8 @@ class UDP_Conn:
         self.ip   = ip
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.sock.bind((ip, port))
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
 
     def send_data(self, msg : "Segment", dest : (str, int)):

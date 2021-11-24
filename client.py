@@ -88,7 +88,6 @@ class Client:
         print("[!] Waiting for response...")
         server_addr, resp, checksum_success = self.conn.listen_single_datagram()
         if not checksum_success:
-            # TODO : Maybe add something?
             print("[!] Checksum failed")
             exit(1)
         print(f"[S] Getting response from {server_addr[0]}:{server_addr[1]}")

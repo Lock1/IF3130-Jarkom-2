@@ -172,7 +172,7 @@ class Server:
             self.__send_metadata(client_addr)
         sequence_base     = 0
         window_size       = self.window_size
-        seq_window_bound  = min(sequence_base + window_size, self.segmentcount)
+        seq_window_bound  = min(sequence_base + window_size, self.segmentcount) - sequence_base
 
         # 32768 bytes max per segment
         with open(self.path, "rb") as src:
@@ -183,7 +183,7 @@ class Server:
                 # Sending segments within window
                 if not self.parallel_mode:
                     print(f"\n[!] [{client_addr[0]}:{client_addr[1]}] Transfer iteration = {iter_count}")
-                for i in range(seq_window_bound - sequence_base):
+                for i in range(seq_window_bound):
                     data_segment = Segment()
                     src.seek(32768 * (sequence_base + i))
                     data_segment.set_payload(src.read(32768))
@@ -191,25 +191,30 @@ class Server:
                     self.conn.send_data(data_segment, client_addr)
                     print(f"[!] [{client_addr[0]}:{client_addr[1]}] Sending segment with sequence number {sequence_base + i}")
 
-                for _ in range(seq_window_bound - sequence_base):
+                for _ in range(seq_window_bound):
                     try:
                         addr, resp, checksum_success = self.__fetch_data_from_addr(client_addr)
 
                         addr_str = f"{addr[0]}:{addr[1]}"
                         if checksum_success and addr == client_addr:
-                            if resp.get_header()["ack"] == sequence_base:
+                            resp_ack_num = resp.get_header()["ack"]
+                            if resp_ack_num == sequence_base:
                                 sequence_base    += 1
-                                seq_window_bound = min(sequence_base + window_size, self.segmentcount)
-                                print(f"[!] [{addr_str}] ACK number {resp.get_header()['ack']}, new sequence base = {sequence_base}")
+                                seq_window_bound = min(sequence_base + window_size, self.segmentcount) - sequence_base
+                                print(f"[!] [{addr_str}] ACK number {resp_ack_num}, new sequence base = {sequence_base}")
                             else:
-                                print(f"[!] [{addr_str}] ACK number not match, ignoring segment")
+                                print(f"[!] [{addr_str}] ACK number {resp_ack_num} not match with current base ({sequence_base}), resending...")
+                                break
                         elif not checksum_success:
                             print(f"[!] [{addr_str}] Checksum failed {addr[0]}:{addr[1]}")
+                            break
                         elif addr != client_addr:
                             print(f"[!] [{addr_str}] Source address not match, ignoring segment")
+                            break
                         else:
                             print(f"[!] [{addr_str}] Unknown error")
                             self.__output_segment_info(addr, resp)
+                            break
                     except socket.timeout:
                         print(f"[!] [{client_addr[0]}:{client_addr[1]}] ACK number {sequence_base} response time out")
                         print(f"[!] [{client_addr[0]}:{client_addr[1]}] Retrying transfer from {sequence_base} to {seq_window_bound - 1}...")
@@ -233,12 +238,10 @@ class Server:
 
 
     def three_way_handshake(self, client_addr : (str, int)) -> bool:
-        # TODO : Maybe queue + separate thread listener?
         # Assuming client already sending SYN request
         # 2. SYN + ACK server response
         synack_resp = Segment()
         synack_resp.set_flag([segment.SYN_FLAG, segment.ACK_FLAG])
-        # TODO : Maybe set sequence number?
         self.conn.send_data(synack_resp, client_addr)
 
         # 3. Wait ACK response

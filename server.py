@@ -26,6 +26,7 @@ class Server:
         with open(self.path, "rb") as src:
             src.seek(0, 2)         # Seek to end of file
             filesize = src.tell()  # Get file size
+
         self.filesize              = filesize
         self.window_size           = lib.config.TCP_WINDOW_SIZE
         self.segmentcount          = math.ceil(filesize / 32768)

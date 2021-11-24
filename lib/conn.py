@@ -26,8 +26,28 @@ class UDP_Conn:
         else:
             self.sock.bind((self.ip, port))
 
+    def __try_common_ifname(self) -> ("str", "str"):
+        common_ifname   = [b"eth0", b"enp0s3", b"lo"]
+        sock_fd         = self.sock.fileno()
+        request_code    = 0x8915
+        selected_ifname = None
+        ipv4_address    = None
 
-    def __auto_config_ip(self, ifname : str):
+        for name in common_ifname:
+            try:
+                ipv4_address    = fcntl.ioctl(sock_fd, request_code, struct.pack("256s", name[:15]))[20:24]
+                selected_ifname = name
+                break
+            except OSError:
+                print(f"[!] Interface {name} not found")
+
+        if selected_ifname is not None:
+            return selected_ifname, ipv4_address
+        else:
+            print(f"[!] Error, no interface found")
+            exit(-1)
+
+    def __auto_config_ip(self, ifname : bytes):
         # Main reference
         # https://stackoverflow.com/questions/24196932/how-can-i-get-the-ip-address-from-nic-in-python
 
@@ -44,7 +64,14 @@ class UDP_Conn:
         c_ifname            = struct.pack("256s", ifname[:15])
 
         # Get IPv4 address with UNIX ioctl(), only slice IPv4 return value
-        ipv4_address        = fcntl.ioctl(sock_fd, request_code, c_ifname)[20:24]
+        try:
+            ipv4_address         = fcntl.ioctl(sock_fd, request_code, c_ifname)[20:24]
+        except OSError:
+            print(f"[!] Warning, interface {ifname.decode(encoding='ascii')} not found, trying common interface name...")
+            ifname, ipv4_address = self.__try_common_ifname()
+            c_ifname             = struct.pack("256s", ifname[:15])
+            print(f"[!] Using interface {ifname.decode(encoding='ascii')}...")
+
 
         # Convert IPv4 address bytes to IPv4 address string
         self.ip             = socket.inet_ntoa(ipv4_address)

@@ -56,15 +56,15 @@ class Segment:
         checksum      = (checksum + seq_upper + seq_lower) & 0xFFFF
         checksum      = (checksum + ack_upper + ack_lower) & 0xFFFF
         flag_in_char  = struct.unpack("B", self.flag.get_flag_bytes())[0]
-        checksum      = (checksum + flag_in_char)  & 0xFFFF
-        checksum      = (checksum + self.checksum) & 0xFFFF
+        checksum      = (checksum + flag_in_char)          & 0xFFFF
+        checksum      = (checksum + self.checksum)         & 0xFFFF
 
         # Sum all 16-bit chunks of data
         for i in range(0, len(self.data), 2):
             buffer         = self.data[i:i+2]
             if len(buffer) == 1:
                 buffer += struct.pack("x")
-            chunk         = struct.unpack("H", buffer)[0]
+            chunk    = struct.unpack("H", buffer)[0]
             checksum = (checksum + chunk) & 0xFFFF
 
         checksum = 0xFFFF - checksum    # Unsigned 16-bit bitwise not

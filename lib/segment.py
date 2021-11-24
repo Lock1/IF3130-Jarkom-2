@@ -5,17 +5,16 @@ import struct
 #   I -> Unsigned int   (x86, 4 bytes)
 #   x -> 1 byte padding
 
+# Constant
+SYN_FLAG = 0b00000010
+ACK_FLAG = 0b00010000
+FIN_FLAG = 0b00000001
+
 class SegmentFlag:
     def __init__(self, flag):
-        # Input : Tuple of 3 bool or integer
-        if type(flag) == tuple:
-            self.syn = flag[0]
-            self.ack = flag[1]
-            self.fin = flag[2]
-        else:
-            self.syn = bool(flag & 0b00000010)
-            self.ack = bool(flag & 0b00010000)
-            self.fin = bool(flag & 0b00000001)
+        self.syn = bool(flag & 0b00000010)
+        self.ack = bool(flag & 0b00010000)
+        self.fin = bool(flag & 0b00000001)
 
     def get_flag_bytes(self) -> "bytes":
         result  = 0b00000000
@@ -32,7 +31,7 @@ class Segment:
     def __init__(self):
         self.sequence = 0
         self.ack      = 0
-        self.flag     = SegmentFlag((False, False, False))
+        self.flag     = SegmentFlag(0b00000000)
         self.checksum = 0
         self.data     = b""
 
@@ -79,8 +78,11 @@ class Segment:
     def set_payload(self, payload : "bytes"):
         self.data     = payload
 
-    def set_flag(self, s : bool, a : bool, f : bool):
-        self.flag     = SegmentFlag((s, a, f))
+    def set_flag(self, flag_list : list):
+        flag_res = 0b00000000
+        for flag in flag_list:
+            flag_res |= flag
+        self.flag     = SegmentFlag(flag_res)
 
     def set_from_bytes(self, src : "bytes"):
         header_tuple  = struct.unpack("IIBxH", src[0:12])
@@ -112,4 +114,7 @@ class Segment:
         return self.data
 
     def valid_checksum(self) -> bool:
+        # Sum everything and bitwise not
+        # Everything else except checksum + checksum = 0xFFFF
+        # 0xFFFF bitwise not = 0x0000
         return self.__calculate_checksum() == 0x0000

@@ -1,6 +1,7 @@
 import lib.arg, lib.conn
 import lib.config
 from lib.segment import Segment
+import lib.segment as segment
 import binascii
 import fcntl
 
@@ -80,7 +81,7 @@ class Client:
         print("[!] Initiating three way handshake...")
         print(f"[!] Sending broadcast SYN request to port {self.server_broadcast_addr[1]}")
         syn_req = Segment()
-        syn_req.set_flag(True, False, False)
+        syn_req.set_flag([segment.SYN_FLAG])
         self.conn.send_data(syn_req, self.server_broadcast_addr)
 
         # 2. Waiting SYN + ACK from server
@@ -97,7 +98,7 @@ class Client:
         if resp_flag.syn and resp_flag.ack:
             # 3. Sending ACK to server
             ack_req = Segment()
-            ack_req.set_flag(False, True, False)
+            ack_req.set_flag([segment.ACK_FLAG])
             self.conn.send_data(ack_req, server_addr)
             self.server_addr = server_addr
             print(f"\n[!] Handshake with {server_addr[0]}:{server_addr[1]} success")
@@ -134,7 +135,7 @@ class Client:
                         print(f"[!] [{addr_str}] FIN flag, stopping transfer...")
                         print(f"[!] [{addr_str}] Sending ACK tearing down connection...")
                         ack_resp = Segment()
-                        ack_resp.set_flag(False, True, False)
+                        ack_resp.set_flag([segment.ACK_FLAG])
                         self.conn.send_data(ack_resp, self.server_addr)
 
 

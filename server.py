@@ -1,6 +1,7 @@
 import lib.arg, lib.conn
 import lib.config
 from lib.segment import Segment
+import lib.segment as segment
 import math
 import time
 import socket
@@ -218,7 +219,7 @@ class Server:
             # Tearing down connection
             print(f"\n[!] [{client_addr[0]}:{client_addr[1]}] File transfer completed, sending FIN to client...\n")
             data_segment = Segment()
-            data_segment.set_flag(False, False, True)
+            data_segment.set_flag([segment.FIN_FLAG])
             self.conn.send_data(data_segment, client_addr)
 
             # Waiting ACK response
@@ -235,7 +236,7 @@ class Server:
         # Assuming client already sending SYN request
         # 2. SYN + ACK server response
         synack_resp = Segment()
-        synack_resp.set_flag(True, True, False)
+        synack_resp.set_flag([segment.SYN_FLAG, segment.ACK_FLAG])
         # TODO : Maybe set sequence number?
         self.conn.send_data(synack_resp, client_addr)
 

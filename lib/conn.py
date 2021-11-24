@@ -19,7 +19,7 @@ class UDP_Conn:
         if config.AUTO_CONFIG_IP:
             self.__auto_config_ip(auto_ifname)
         else:
-            self.broadcast_addr = lib.config.SERVER_BROADCAST_IP
+            self.broadcast_addr = ""    # Empty string for listening broadcast
 
         if listen_broadcast:
             self.sock.bind(("", port))
@@ -72,10 +72,8 @@ class UDP_Conn:
             c_ifname             = struct.pack("256s", ifname[:15])
             print(f"[!] Using interface {ifname.decode(encoding='ascii')}...")
 
-
         # Convert IPv4 address bytes to IPv4 address string
         self.ip             = socket.inet_ntoa(ipv4_address)
-
 
         # Get IPv4 subnet mask from interface name
         # Using same first and third argument, retrieve subnet mask
@@ -84,7 +82,6 @@ class UDP_Conn:
         subnet_mask         = fcntl.ioctl(sock_fd, request_code, c_ifname)[20:24]
         self.subnet_mask    = socket.inet_ntoa(subnet_mask)
         self.broadcast_addr = str(ipaddress.IPv4Network(self.ip + "/" + self.subnet_mask, False).broadcast_address)
-
 
 
     def get_ipv4(self) -> str:

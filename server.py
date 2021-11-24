@@ -114,7 +114,6 @@ class Server:
                 if time.time() >= timeout:
                     raise socket.timeout()
 
-
             return self.packet_queue[addr].pop(0)
         else:
             return self.conn.listen_single_datagram()

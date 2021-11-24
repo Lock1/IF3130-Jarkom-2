@@ -1,4 +1,9 @@
 import struct
+# Struct format used:
+#   B -> Unsigned char  (1 byte)
+#   H -> Unsigned short (x86, 2 bytes)
+#   I -> Unsigned int   (x86, 4 bytes)
+#   x -> 1 byte padding
 
 class SegmentFlag:
     def __init__(self, flag):
@@ -42,19 +47,28 @@ class Segment:
         return output
 
     def __calculate_checksum(self) -> int:
-        checksum     = 0x0000
-        checksum     = (checksum + self.sequence) & 0xFFFF
-        checksum     = (checksum + self.ack)      & 0xFFFF
-        flag_in_char = struct.unpack("B", self.flag.get_flag_bytes())[0]
-        checksum     = (checksum + flag_in_char)  & 0xFFFF
-        checksum     = (checksum + self.checksum) & 0xFFFF
+        checksum      = 0x0000
+        # Mask and shift 4 bytes unsigned integer to 2 bytes / 16 bit integer
+        seq_upper     = (self.sequence & 0xFFFF0000) >> 16
+        seq_lower     = (self.sequence & 0x0000FFFF)
+        ack_upper     = (self.ack      & 0xFFFF0000) >> 16
+        ack_lower     = (self.ack      & 0x0000FFFF)
+
+        checksum      = (checksum + seq_upper + seq_lower) & 0xFFFF
+        checksum      = (checksum + ack_upper + ack_lower) & 0xFFFF
+        flag_in_char  = struct.unpack("B", self.flag.get_flag_bytes())[0]
+        checksum      = (checksum + flag_in_char)  & 0xFFFF
+        checksum      = (checksum + self.checksum) & 0xFFFF
+
+        # Sum all 16-bit chunks of data
         for i in range(0, len(self.data), 2):
             buffer         = self.data[i:i+2]
             if len(buffer) == 1:
                 buffer += struct.pack("x")
             chunk         = struct.unpack("H", buffer)[0]
             checksum = (checksum + chunk) & 0xFFFF
-        checksum = 0xFFFF - checksum
+
+        checksum = 0xFFFF - checksum    # Unsigned 16-bit bitwise not
         return checksum
 
 

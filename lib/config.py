@@ -1,6 +1,6 @@
 # Config file
 # Tested on WSL2 with Ubuntu 20.04 and Virtualbox Ubuntu 20.04
-AUTO_CONFIG_IP        = True         # Will override BIND_IP and BROADCAST_IP configuration
+AUTO_CONFIG_IP        = True         # Use AUTO_CONFIG_IP for testing in VM
 
 # If AUTO_CONFIG_IP True, change INTERFACE_NAME value
 CLIENT_INTERFACE_NAME = b"eth0"
@@ -13,7 +13,7 @@ SERVER_BIND_IP        = "localhost"
 CLIENT_SEND_PORT      = 5005         # Target port for sending segment
 
 LISTEN_BUFFER_SIZE    = 2**16
-TCP_WINDOW_SIZE       = 5
+TCP_WINDOW_SIZE       = 10
 
 SERVER_TRANSFER_ACK_TIMEOUT = 0.1    # Unit : second
 

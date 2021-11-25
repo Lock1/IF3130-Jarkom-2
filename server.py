@@ -44,6 +44,7 @@ class Server:
             listen_broadcast=True
             )
         self.ip                    = self.conn.get_ipv4()
+        self.conn.set_listen_timeout(lib.config.SERVER_TRANSFER_ACK_TIMEOUT)
 
     def __output_segment_info(self, addr : (str, int), data : "Segment"):
         if self.verbose_segment_print:
@@ -63,7 +64,7 @@ class Server:
 
     def __send_metadata(self, client_addr : (str, int)):
         metadata = Segment()
-        payload  = bytes(self.filename, 'ascii') + b"\x04" + bytes(self.file_ext, 'ascii')
+        payload  = bytes(self.filename, "ascii") + b"\x04" + bytes(self.file_ext, "ascii")
         metadata.set_payload(payload)
         self.conn.send_data(metadata, client_addr)
 
@@ -73,16 +74,20 @@ class Server:
 
     def __parallel_packet_queue_listener(self):
         while True:
-            addr, data, checksum_success = self.conn.listen_single_datagram()
-            if checksum_success:
-                if self.__valid_syn_request(data):
-                    self.syn_request_queue.append((addr, data, checksum_success))
-                elif addr in self.packet_queue:
-                    self.packet_queue[addr].append((addr, data, checksum_success))
+            try:
+                addr, data, checksum_success = self.conn.listen_single_datagram()
+                if checksum_success:
+                    if self.__valid_syn_request(data):
+                        self.syn_request_queue.append((addr, data, checksum_success))
+                    elif addr in self.packet_queue:
+                        self.packet_queue[addr].append((addr, data, checksum_success))
+                    else:
+                        self.packet_queue[addr] = [(addr, data, checksum_success)]
                 else:
-                    self.packet_queue[addr] = [(addr, data, checksum_success)]
-            else:
-                print(f"[!] [Listener] [{addr[0]}:{addr[1]}] Checksum error")
+                    print(f"[!] [Listener] [{addr[0]}:{addr[1]}] Checksum error")
+            except socket.timeout:
+                # Just keep listening
+                pass
 
     def __parallel_listen_syn_request(self):
         if self.syn_request_queue:   # If queue is not empty
@@ -134,18 +139,22 @@ class Server:
             waiting_client        = True
 
             while waiting_client:
-                addr, data, checksum_success = self.conn.listen_single_datagram()
-                if self.__valid_syn_request(data) and addr not in self.client_conn_list and checksum_success:
-                    self.client_conn_list.append(addr)
+                try:
+                    addr, data, checksum_success = self.conn.listen_single_datagram()
+                    if self.__valid_syn_request(data) and addr not in self.client_conn_list and checksum_success:
+                        self.client_conn_list.append(addr)
 
-                    print(f"[!] Client ({addr[0]}:{addr[1]}) found")
-                    prompt = input("[?] Listen more? (y/n) ")
-                    if prompt == "y":
-                        waiting_client = True
-                    else:
-                        waiting_client = False
-                elif addr in self.client_conn_list:
-                    print(f"[!] Client ({addr[0]}:{addr[1]}) already in list")
+                        print(f"[!] Client ({addr[0]}:{addr[1]}) found")
+                        prompt = input("[?] Listen more? (y/n) ")
+                        if prompt == "y":
+                            waiting_client = True
+                        else:
+                            waiting_client = False
+                    elif addr in self.client_conn_list:
+                        print(f"[!] Client ({addr[0]}:{addr[1]}) already in list")
+                except socket.timeout:
+                    # Do nothing on timeout
+                    pass
 
 
     def start_file_transfer(self):

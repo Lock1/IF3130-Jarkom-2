@@ -32,9 +32,9 @@ class Client:
             send_broadcast=True
             )
         self.ip                    = self.conn.get_ipv4()
-        self.listen_timeout        = lib.config.CLIENT_LISTEN_TIMEOUT
         self.server_broadcast_addr = (self.conn.get_broadcast_addr(), lib.config.CLIENT_SEND_PORT)
-
+        self.listen_timeout        = lib.config.CLIENT_LISTEN_TIMEOUT
+        self.listen_shake_timeout  = lib.config.CLIENT_LISTEN_HANDSHAKE_TIMEOUT
 
     def __output_segment_info(self, addr : (str, int), data : "Segment"):
         if self.verbose_segment_print:
@@ -53,27 +53,31 @@ class Client:
     def __get_metadata(self):
         addr_str = f"{self.server_addr[0]}:{self.server_addr[1]}"
         print(f"\n[Bonus] [{addr_str}] Fetching metadata...")
-        addr, resp, checksum_success = self.conn.listen_single_datagram()
-        if checksum_success:
-            payload = resp.get_payload()
-            # Payload parsing
-            parsing_filename = True
-            filename         = ""
-            file_ext         = ""
-            for byte in payload:
-                if byte == 0x4:
-                    parsing_filename = False
-                elif parsing_filename:
-                    filename += chr(byte)
-                else:
-                    file_ext += chr(byte)
+        try:
+            addr, resp, checksum_success = self.conn.listen_single_datagram()
+            if checksum_success:
+                payload = resp.get_payload()
+                # Payload parsing
+                parsing_filename = True
+                filename         = ""
+                file_ext         = ""
+                for byte in payload:
+                    if byte == 0x4:
+                        parsing_filename = False
+                    elif parsing_filename:
+                        filename += chr(byte)
+                    else:
+                        file_ext += chr(byte)
 
-            print(f"[Bonus] [{addr_str}] Metadata information :")
-            print(f"[Bonus] [{addr_str}] Source filename : {filename}")
-            print(f"[Bonus] [{addr_str}] File extension  : {file_ext}\n")
-        else:
-            print(f"[Bonus] [{addr_str}] Checksum failed, metadata packet is corrupted")
-        self.__output_segment_info(addr, resp)
+                print(f"[Bonus] [{addr_str}] Metadata information :")
+                print(f"[Bonus] [{addr_str}] Source filename : {filename}")
+                print(f"[Bonus] [{addr_str}] File extension  : {file_ext}\n")
+            else:
+                print(f"[Bonus] [{addr_str}] Checksum failed, metadata packet is corrupted")
+            self.__output_segment_info(addr, resp)
+        except socket.timeout:
+            print(f"[Bonus] [{addr_str}] Listen timeout, skipping metadata...")
+
 
 
     def __send_ack_reply(self, ack_num : int):
@@ -99,25 +103,30 @@ class Client:
 
         # 2. Waiting SYN + ACK from server
         print("[!] Waiting for response...")
-        server_addr, resp, checksum_success = self.conn.listen_single_datagram()
-        if not checksum_success:
-            print("[!] Checksum failed")
-            exit(1)
-        print(f"[S] Getting response from {server_addr[0]}:{server_addr[1]}")
-        self.__output_segment_info(server_addr, resp)
+        self.conn.set_listen_timeout(self.listen_shake_timeout)
+        try:
+            server_addr, resp, checksum_success = self.conn.listen_single_datagram()
+            if not checksum_success:
+                print("[!] Checksum failed")
+                exit(1)
+            print(f"[S] Getting response from {server_addr[0]}:{server_addr[1]}")
+            self.__output_segment_info(server_addr, resp)
 
-        resp_flag = resp.get_flag()
-        if resp_flag.syn and resp_flag.ack:
-            # 3. Sending ACK to server
-            ack_req = Segment()
-            ack_req.set_flag([segment.ACK_FLAG])
-            self.conn.send_data(ack_req, server_addr)
-            self.server_addr = server_addr
-            print(f"\n[!] Handshake with {server_addr[0]}:{server_addr[1]} success")
-        else:
-            print("\n[!] Invalid response : Server SYN-ACK handshake response invalid")
-            print(f"[!] Handshake with {server_addr[0]}:{server_addr[1]} failed")
-            print(f"[!] Exiting...")
+            resp_flag = resp.get_flag()
+            if resp_flag.syn and resp_flag.ack:
+                # 3. Sending ACK to server
+                ack_req = Segment()
+                ack_req.set_flag([segment.ACK_FLAG])
+                self.conn.send_data(ack_req, server_addr)
+                self.server_addr = server_addr
+                print(f"\n[!] Handshake with {server_addr[0]}:{server_addr[1]} success")
+            else:
+                print("\n[!] Invalid response : Server SYN-ACK handshake response invalid")
+                print(f"[!] Handshake with {server_addr[0]}:{server_addr[1]} failed")
+                print(f"[!] Exiting...")
+                exit(1)
+        except socket.timeout:
+            print("\n[!] SYN-ACK response timeout, exiting...")
             exit(1)
 
 

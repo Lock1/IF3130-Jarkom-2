@@ -39,7 +39,7 @@ class UDP_Conn:
                 selected_ifname = name
                 break
             except OSError:
-                print(f"[!] Interface {name} not found")
+                print(f"[!] Interface {name.decode('ascii')} not found")
 
         if selected_ifname is not None:
             return selected_ifname, ipv4_address

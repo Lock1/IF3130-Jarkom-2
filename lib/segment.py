@@ -12,15 +12,15 @@ FIN_FLAG = 0b00000001
 
 class SegmentFlag:
     def __init__(self, flag):
-        self.syn = bool(flag & 0b00000010)
-        self.ack = bool(flag & 0b00010000)
-        self.fin = bool(flag & 0b00000001)
+        self.syn = bool(flag & SYN_FLAG)
+        self.ack = bool(flag & ACK_FLAG)
+        self.fin = bool(flag & FIN_FLAG)
 
     def get_flag_bytes(self) -> "bytes":
         result  = 0b00000000
-        result |= 0b00000010 if self.syn else 0
-        result |= 0b00010000 if self.ack else 0
-        result |= 0b00000001 if self.fin else 0
+        result |= SYN_FLAG if self.syn else 0
+        result |= ACK_FLAG if self.ack else 0
+        result |= FIN_FLAG if self.fin else 0
         return struct.pack("B", result)
 
 

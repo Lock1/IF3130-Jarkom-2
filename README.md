@@ -1,4 +1,6 @@
 # Tugas Besar 2 - IF3130 - Jaringan Komputer
+![huh](docs/huh.jpg)
+
 **TBA**
 
 | Library   |
